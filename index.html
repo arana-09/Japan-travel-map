@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Japan Log"/>
+<meta name="theme-color" content="#1a3fd4"/>
+<link rel="manifest" href="manifest.json"/>
+<title>Japan Travel Log</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --blue:#1a3fd4;--blue-dark:#1230b0;--blue-light:#2850e8;
+  --white:#fff;--off:#f0ede6;--green:#4ade80;--yellow:#fcd34d;
+  --border:rgba(255,255,255,0.18);--text-dim:rgba(255,255,255,0.55);
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;background:var(--blue-dark)}
+
+/* ── LAYOUT ─────────────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100%;height:100dvh;padding-top:var(--safe-top)}
+
+/* Header */
+#header{
+  background:var(--blue);border-bottom:2px solid var(--border);
+  padding:12px 16px 10px;flex-shrink:0;
+  display:flex;align-items:center;gap:12px
+}
+#header-text{flex:1;min-width:0}
+#header h1{font-size:20px;font-weight:900;color:var(--white);letter-spacing:-0.5px;line-height:1}
+#header p{font-size:11px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stats-row{display:flex;gap:8px;flex-shrink:0}
+.hstat{text-align:center;background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px}
+.hstat-n{font-size:18px;font-weight:900;color:var(--white);line-height:1}
+.hstat-l{font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+
+/* Body: map + panel */
+#body{flex:1;display:flex;min-height:0;position:relative}
+
+/* Map */
+#map-wrap{flex:1;position:relative;z-index:1;border-right:2px solid var(--border)}
+#map{width:100%;height:100%}
+.leaflet-control-zoom a{background:var(--blue)!important;color:var(--white)!important;border-color:var(--border)!important;font-weight:900}
+.leaflet-control-zoom a:hover{background:var(--blue-dark)!important}
+.leaflet-bar{border:none!important;box-shadow:0 2px 12px rgba(0,0,0,0.4)!important}
+.leaflet-control-attribution{background:rgba(0,0,0,0.45)!important;color:rgba(255,255,255,0.4)!important;font-size:8px!important}
+.leaflet-control-attribution a{color:rgba(255,255,255,0.6)!important}
+.leaflet-popup-content-wrapper{background:var(--blue);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-family:'Inter',sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
+.leaflet-popup-tip{background:var(--blue)}
+.leaflet-popup-content{margin:12px 16px;font-size:12px}
+.leaflet-popup-close-button{color:rgba(255,255,255,0.6)!important;font-size:18px!important;top:5px!important;right:8px!important}
+
+/* Side panel — desktop */
+#panel{
+  width:300px;background:var(--blue);
+  display:flex;flex-direction:column;overflow:hidden;z-index:2;flex-shrink:0
+}
+
+/* Bottom sheet — mobile */
+#sheet-handle{display:none}
+
+/* Add form */
+#add-section{padding:12px 14px;border-bottom:2px solid var(--border);flex-shrink:0}
+#add-section h2{font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.fl{font-size:8px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;display:block;margin-top:5px}
+.fl:first-of-type{margin-top:0}
+
+/* Search */
+#search-wrap{position:relative;margin-bottom:0}
+#inp-name{
+  width:100%;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.2);
+  color:var(--white);border-radius:7px;padding:7px 30px 7px 10px;
+  font-size:12px;font-family:'Inter',sans-serif;outline:none
+}
+#inp-name::placeholder{color:rgba(255,255,255,0.3)}
+#inp-name:focus{border-color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.14)}
+#spin{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:13px;height:13px;border:2px solid rgba(255,255,255,0.15);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite;display:none}
+@keyframes spin{to{transform:translateY(-50%) rotate(360deg)}}
+#sugg{
+  position:absolute;top:calc(100% + 2px);left:0;right:0;
+  background:#1230b0;border:1.5px solid rgba(255,255,255,0.2);
+  border-radius:7px;z-index:9999;max-height:200px;overflow-y:auto;display:none;
+  box-shadow:0 8px 24px rgba(0,0,0,0.4)
+}
+#sugg::-webkit-scrollbar{width:4px}
+#sugg::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:2px}
+.sug{padding:8px 12px;font-size:11px;color:var(--white);cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sug:last-child{border-bottom:none}
+.sug:hover,.sug.active{background:rgba(255,255,255,0.12)}
+.sug-name{font-weight:700;font-size:12px}
+.sug-detail{font-size:9px;color:rgba(255,255,255,0.5);margin-top:1px}
+.no-res{padding:10px 12px;font-size:11px;color:rgba(255,255,255,0.35);font-style:italic}
+.sug-manual{border-top:1px solid rgba(255,255,255,0.15)!important;background:rgba(147,197,253,0.06)}
+
+/* Selected badge */
+#sel-badge{
+  display:none;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
+  border-radius:6px;padding:6px 28px 6px 9px;font-size:11px;color:var(--white);
+  position:relative;margin-top:5px
+}
+#sel-badge .sb-name{font-weight:700}
+#sel-badge .sb-detail{font-size:9px;color:rgba(255,255,255,0.5);margin-top:1px}
+#clr-sel{position:absolute;right:7px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:13px;line-height:1;padding:2px}
+#clr-sel:hover{color:var(--white)}
+
+#inp-type{
+  width:100%;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.2);
+  color:var(--white);border-radius:7px;padding:7px 10px;
+  font-size:12px;font-family:'Inter',sans-serif;outline:none
+}
+#inp-type:focus{border-color:rgba(255,255,255,0.6)}
+#inp-type option{background:#1a3fd4;color:white}
+#inp-pref{
+  width:100%;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.22);
+  color:var(--white);border-radius:7px;padding:7px 10px;
+  font-size:12px;font-family:'Inter',sans-serif;outline:none;margin-bottom:0
+}
+#inp-pref:focus{border-color:rgba(255,255,255,0.6)}
+#inp-pref option{background:#1a3fd4;color:white}
+
+.add-btn{
+  width:100%;background:var(--white);color:var(--blue);border:none;border-radius:7px;
+  padding:8px;font-size:12px;font-weight:900;cursor:pointer;
+  font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:.04em;
+  margin-top:8px;transition:background .15s;-webkit-appearance:none
+}
+.add-btn:hover{background:#dde8ff}
+.add-btn:active{background:#c5d5ff}
+
+/* Log */
+#log-section{flex:1;display:flex;flex-direction:column;min-height:0}
+#log-head{
+  padding:9px 14px 7px;border-bottom:2px solid var(--border);
+  display:flex;align-items:center;gap:5px;flex-shrink:0
+}
+#log-head h2{font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;flex:1}
+.ftab{
+  background:transparent;border:1px solid rgba(255,255,255,0.25);
+  color:rgba(255,255,255,0.55);border-radius:4px;padding:3px 8px;
+  font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;
+  text-transform:uppercase;transition:all .1s
+}
+.ftab.active{background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.5);color:var(--white)}
+#loc-list{flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:2px}
+#loc-list::-webkit-scrollbar{width:4px}
+#loc-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:2px}
+.loc-row{
+  display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;
+  cursor:pointer;border:1px solid transparent;transition:background .1s
+}
+.loc-row:hover{background:rgba(255,255,255,0.1)}
+.loc-row.alt{background:rgba(255,255,255,0.07)}
+.loc-row.alt:hover{background:rgba(255,255,255,0.13)}
+.loc-row.sel{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.25)}
+.loc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-v{background:var(--green)}.dot-w{background:var(--yellow)}
+.loc-info{flex:1;min-width:0}
+.loc-name{font-size:12px;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.loc-pref{font-size:9px;color:rgba(255,255,255,0.45);margin-top:1px}
+.loc-del{background:transparent;border:none;color:rgba(255,255,255,0.25);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;border-radius:4px;transition:all .1s}
+.loc-del:hover{color:#f87171;background:rgba(255,100,100,0.1)}
+.loc-pref-sel{
+  background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.2);
+  color:rgba(255,255,255,0.5);font-size:9px;font-family:'Inter',sans-serif;
+  cursor:pointer;padding:1px 2px;margin-top:2px;outline:none;
+  -webkit-appearance:none;appearance:none;width:100%;
+}
+.loc-pref-sel:hover{color:rgba(255,255,255,0.8);border-bottom-color:rgba(255,255,255,0.5)}
+.loc-pref-sel:focus{color:white;border-bottom-color:white}
+.loc-pref-sel option{background:#1a3fd4;color:white;font-size:11px}
+.empty{font-size:11px;color:rgba(255,255,255,0.3);padding:16px 8px;text-align:center}
+
+/* Footer */
+#footer{
+  background:var(--blue);border-top:2px solid var(--border);
+  padding:8px 16px calc(8px + var(--safe-bot));
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;flex-shrink:0
+}
+.meta-cell{padding:4px 8px}
+.meta-cell+.meta-cell{border-left:2px solid var(--border)}
+.mk{font-size:8px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:1px}
+.mv{font-size:13px;font-weight:900;color:var(--white)}
+
+
+
+/* Category picker */
+#cat-picker{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.cat-btn{
+  flex:1;min-width:calc(33% - 4px);padding:5px 4px;border-radius:6px;
+  background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);
+  color:rgba(255,255,255,0.6);font-size:10px;font-family:'Inter',sans-serif;
+  cursor:pointer;text-align:center;transition:all .15s;line-height:1.3
+}
+.cat-btn:hover{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.3);color:white}
+.cat-btn.active{border-color:white;background:rgba(255,255,255,0.18);color:white;font-weight:700}
+/* Log row category icon */
+.loc-cat-icon{font-size:14px;flex-shrink:0;width:20px;text-align:center}
+/* Category change select in log */
+.loc-cat-sel{
+  background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.2);
+  color:rgba(255,255,255,0.5);font-size:9px;font-family:'Inter',sans-serif;
+  cursor:pointer;padding:1px 2px;margin-top:1px;outline:none;
+  -webkit-appearance:none;appearance:none;width:100%;
+}
+.loc-cat-sel:hover{color:rgba(255,255,255,0.8)}
+.loc-cat-sel:focus{color:white}
+.loc-cat-sel option{background:#1a3fd4;color:white;font-size:11px}
+
+/* ── ADD/LOG PANELS ─────────────────────────────────── */
+/* Desktop: both panels stack normally inside #panel flex column */
+#add-panel{display:flex;flex-direction:column;flex-shrink:0}
+#log-panel{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#log-panel #log-section{flex:1;display:flex;flex-direction:column;min-height:0}
+
+/* ── MINI-MAP ───────────────────────────────────────── */
+#minimap-section{
+  border-bottom:2px solid var(--border);flex-shrink:0;
+  padding:10px 14px 8px;background:rgba(0,0,20,0.2)
+}
+#minimap-head{
+  display:flex;align-items:center;margin-bottom:6px
+}
+#minimap-head h2{font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;flex:1}
+#minimap-legend{display:flex;gap:8px}
+.mm-leg{display:flex;align-items:center;gap:3px;font-size:8px;color:var(--text-dim)}
+.mm-dot{width:7px;height:7px;border-radius:2px}
+#minimap-svg{
+  width:100%;display:block;cursor:default;
+  border-radius:6px;overflow:hidden
+}
+#minimap-svg .mp{
+  stroke:rgba(255,255,255,0.25);stroke-width:0.5;
+  transition:fill 0.15s,fill-opacity 0.15s;cursor:pointer
+}
+#minimap-svg .mp:hover{stroke:white;stroke-width:1;fill-opacity:1!important}
+#minimap-tooltip{
+  position:fixed;background:#1a3fd4;border:1px solid rgba(255,255,255,0.3);
+  border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;color:white;
+  pointer-events:none;display:none;z-index:9999;white-space:nowrap;
+  font-family:'Inter',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.4)
+}
+
+/* ── MOBILE ─────────────────────────────────────────── */
+@media(max-width:640px){
+  /* Tab bar */
+  #tab-bar{
+    display:flex;background:var(--blue);border-top:2px solid var(--border);
+    flex-shrink:0;padding-bottom:var(--safe-bot);z-index:100
+  }
+  .tab-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:8px 4px 6px;background:transparent;border:none;color:rgba(255,255,255,0.45);
+    font-family:'Inter',sans-serif;font-size:10px;font-weight:700;cursor:pointer;
+    text-transform:uppercase;letter-spacing:.04em;gap:3px;transition:color .15s;
+    -webkit-tap-highlight-color:transparent
+  }
+  .tab-btn .tab-icon{font-size:20px;line-height:1}
+  .tab-btn.active{color:white}
+  .tab-btn.active .tab-icon{filter:drop-shadow(0 0 6px rgba(255,255,255,0.4))}
+
+  #app{flex-direction:column}
+  #header{padding:10px 14px 8px}
+  #header h1{font-size:18px}
+  #header p{font-size:10px}
+  .hstat{padding:4px 8px}
+  .hstat-n{font-size:16px}
+
+  /* Body becomes a view switcher */
+  #body{flex:1;min-height:0;position:relative;overflow:hidden}
+
+  /* Map tab — always rendered, shown/hidden */
+  #map-wrap{
+    position:absolute;inset:0;
+    transition:opacity .2s,transform .2s
+  }
+  #map-wrap.tab-hidden{opacity:0;pointer-events:none}
+  #map{width:100%;height:100%;border:none}
+
+  /* Panel becomes a full-screen overlay when active */
+  #panel{
+    position:absolute;inset:0;
+    width:100%;border-left:none;border-top:none;
+    border-radius:0;overflow-y:auto;overflow-x:hidden;
+    display:none;flex-direction:column;
+    background:var(--blue)
+  }
+  #map-wrap{border-right:none}
+  #panel.tab-active{display:flex}
+
+  /* Hide sheet handle on mobile tab layout */
+  #sheet-handle{display:none}
+
+  /* Add form full width */
+  #add-section{padding:14px 16px;flex-shrink:0}
+  #add-section h2{font-size:11px;margin-bottom:10px}
+  .fl{font-size:9px;margin-top:8px}
+  #inp-name,#inp-type,#inp-pref{font-size:14px;padding:10px 12px}
+  #inp-name{padding-right:36px}
+  .add-btn{font-size:14px;padding:12px;margin-top:10px}
+  .cat-btn{font-size:11px;padding:8px 4px;min-width:calc(33% - 4px)}
+
+  /* Mini-map smaller on mobile */
+  #minimap-section{padding:10px 16px 8px}
+  #minimap-svg{max-height:200px;width:auto;margin:0 auto;display:block}
+
+  /* Mobile: add-panel scrollable, log-panel takes full height */
+  #add-panel{
+    display:none;flex-direction:column;
+    position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+    background:var(--blue)
+  }
+  #add-panel.mob-active{display:flex}
+
+  #log-panel{
+    display:none;flex-direction:column;
+    position:absolute;inset:0;overflow:hidden;
+    background:var(--blue)
+  }
+  #log-panel.mob-active{display:flex}
+
+  /* Log takes full height of log-panel */
+  #log-panel #log-section{
+    flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden
+  }
+  #log-panel #loc-list{
+    flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:6px 12px 16px;gap:0
+  }
+
+  /* Log rows */
+  .loc-row{
+    padding:14px 12px;border-radius:0;gap:12px;
+    border-bottom:1px solid rgba(255,255,255,0.07);
+    border-left:none;border-right:none;border-top:none;
+    min-height:64px
+  }
+  .loc-row:first-child{border-radius:8px 8px 0 0}
+  .loc-row:last-child{border-radius:0 0 8px 8px;border-bottom:none}
+  .loc-row.alt{background:rgba(255,255,255,0.05)}
+  .loc-row.sel{background:rgba(255,255,255,0.14)!important;border-color:rgba(255,255,255,0.2)!important}
+  .loc-name{font-size:15px;font-weight:700;line-height:1.2}
+  .loc-cat-icon{font-size:24px;width:30px}
+  .loc-dot{width:11px;height:11px}
+  .loc-del{
+    font-size:16px;width:36px;height:36px;min-width:36px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:50%;background:rgba(255,100,100,0.12);
+    border:1px solid rgba(255,100,100,0.2);color:rgba(255,150,150,0.7)
+  }
+  .loc-del:hover{background:rgba(255,100,100,0.25);color:#f87171}
+  .loc-pref-sel{font-size:13px;padding:4px 0;min-height:32px;color:rgba(255,255,255,0.6)}
+  .loc-cat-sel{font-size:13px;padding:4px 0;min-height:32px;width:auto!important;min-width:90px;color:rgba(255,255,255,0.6)}
+
+  /* Log head and controls */
+  #log-head{padding:12px 16px 10px;flex-wrap:wrap;gap:5px;background:var(--blue);flex-shrink:0}
+  #log-head h2{font-size:12px;width:100%}
+  .ftab{font-size:12px;padding:7px 14px;border-radius:20px;min-height:34px}
+  #log-controls{
+    padding:8px 16px 10px;gap:6px;flex-wrap:wrap;
+    background:rgba(0,0,20,0.2);flex-shrink:0
+  }
+  .sort-btn{font-size:12px;padding:7px 14px;border-radius:20px;min-height:34px}
+  .sort-dir{font-size:14px;padding:6px 12px;min-height:34px;border-radius:20px}
+
+  /* Add form */
+  #add-section{padding:16px 16px;flex-shrink:0}
+  #add-section h2{font-size:12px;margin-bottom:12px}
+  .fl{font-size:10px;margin-top:10px}
+  #inp-name,#inp-type,#inp-pref{font-size:16px;padding:12px 14px}
+  #inp-name{padding-right:40px}
+  .add-btn{font-size:16px;padding:14px;margin-top:12px;border-radius:10px}
+  .cat-btn{font-size:12px;padding:10px 4px;min-width:calc(33% - 4px);border-radius:8px}
+  .sug{padding:14px 16px}
+  .sug-name{font-size:14px}
+  .sug-detail{font-size:12px;margin-top:3px}
+  #sel-badge{padding:10px 36px 10px 12px;font-size:12px}
+  #clr-sel{font-size:16px}
+
+  /* Mini-map on add panel */
+  #minimap-section{padding:12px 16px 10px}
+  #minimap-svg{max-height:180px;width:auto;margin:0 auto;display:block}
+
+  #footer{display:none}
+
+  /* Suggestions dropdown bigger tap targets */
+  .sug{padding:12px 14px}
+  .sug-name{font-size:13px}
+  .sug-detail{font-size:11px}
+
+  #footer{display:none}
+}
+
+/* Sort controls */
+#log-controls{
+  padding:6px 14px 0;display:flex;align-items:center;gap:5px;flex-shrink:0;
+  border-bottom:2px solid var(--border);padding-bottom:6px
+}
+#log-controls span{font-size:8px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;white-space:nowrap}
+.sort-btn{
+  background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.55);border-radius:4px;padding:3px 7px;
+  font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;
+  white-space:nowrap;transition:all .1s
+}
+.sort-btn.active{background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.5);color:white}
+.sort-dir{
+  background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.55);border-radius:4px;padding:3px 6px;
+  font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;
+  line-height:1;transition:all .1s
+}
+.sort-dir:hover{background:rgba(255,255,255,0.14);color:white}
+
+/* Map layer controls */
+#layer-ctrl{
+  position:absolute;bottom:80px;left:10px;z-index:500;
+  display:flex;flex-direction:column;gap:4px
+}
+.layer-btn{
+  background:#1a3fd4;border:2px solid rgba(255,255,255,0.3);
+  color:white;border-radius:7px;padding:6px 10px;
+  font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;
+  white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,0.35);
+  display:flex;align-items:center;gap:5px;transition:all .15s;
+  -webkit-tap-highlight-color:transparent
+}
+.layer-btn:hover{background:#2850e8;border-color:rgba(255,255,255,0.5)}
+.layer-btn.active{background:#0f2fa0;border-color:white}
+.layer-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+@media(max-width:640px){
+  #layer-ctrl{bottom:80px;left:10px}
+  .layer-btn{font-size:11px;padding:8px 12px}
+  #log-controls{padding:6px 16px}
+  .sort-btn{font-size:10px;padding:4px 9px}
+}
+
+/* Prefecture groups in log */
+.pref-group{border-bottom:1px solid rgba(255,255,255,0.08)}
+.pref-group:last-child{border-bottom:none}
+.pref-group-header{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px 10px 12px;cursor:pointer;
+  background:rgba(0,0,20,0.3);
+  user-select:none;-webkit-user-select:none;
+  transition:background .1s;position:sticky;top:0;z-index:2
+}
+.pref-group-header:hover{background:rgba(0,0,20,0.45)}
+.pref-group-header:active{background:rgba(0,0,20,0.55)}
+.pg-chevron{
+  font-size:11px;color:rgba(255,255,255,0.4);
+  transition:transform .2s;flex-shrink:0;width:14px;text-align:center
+}
+.pref-group.collapsed .pg-chevron{transform:rotate(-90deg)}
+.pg-name{font-size:12px;font-weight:700;color:white;flex:1}
+.pg-badges{display:flex;gap:4px;align-items:center}
+.pg-count{
+  font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;
+  background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.6)
+}
+.pg-v{background:rgba(74,222,128,0.15);color:#4ade80}
+.pg-w{background:rgba(252,211,77,0.15);color:#fcd34d}
+.pref-group-body{overflow:hidden;transition:max-height .25s ease}
+.pref-group.collapsed .pref-group-body{max-height:0!important}
+
+/* Mobile tweaks for groups */
+@media(max-width:640px){
+  .pref-group-header{padding:13px 14px 13px 12px;position:sticky;top:0}
+  .pg-name{font-size:13px}
+  .pg-count{font-size:11px;padding:3px 9px}
+  .loc-row{border-bottom:1px solid rgba(255,255,255,0.06);border-radius:0}
+  .loc-row:last-child{border-bottom:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div id="header">
+    <div id="header-text">
+      <h1>🗾 Japan Travel Log</h1>
+      <p id="subtitle">Start adding places below</p>
+    </div>
+    <div id="stats-row">
+      <div class="hstat"><div class="hstat-n" id="sv">0</div><div class="hstat-l">Visited</div></div>
+      <div class="hstat"><div class="hstat-n" id="sw" style="color:var(--yellow)">0</div><div class="hstat-l">Wishlist</div></div>
+      <div class="hstat"><div class="hstat-n" id="sp" style="color:#93c5fd">0</div><div class="hstat-l">Prefs</div></div>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div id="body">
+    <div id="map-wrap">
+      <div id="map"></div>
+      <div id="layer-ctrl">
+        <button class="layer-btn" id="btn-shinkansen" onclick="toggleLayer('shinkansen')">
+          <div class="layer-dot" style="background:#e11d48"></div>Shinkansen
+        </button>
+        <button class="layer-btn" id="btn-trains" onclick="toggleLayer('trains')">
+          <div class="layer-dot" style="background:#3b82f6"></div>Train Lines
+        </button>
+        <button class="layer-btn" id="btn-subway" onclick="toggleLayer('subway')">
+          <div class="layer-dot" style="background:#8b5cf6"></div>Subway/Metro
+        </button>
+      </div>
+    </div>
+
+    <div id="panel">
+      <div id="sheet-handle"><div id="sheet-handle-bar"></div></div>
+
+      <!-- ADD PANEL — shown on desktop always, mobile Add tab only -->
+      <div id="add-panel">
+        <!-- Add form -->
+        <div id="add-section">
+          <h2>Add Location</h2>
+          <span class="fl">Search Place</span>
+          <div id="search-wrap">
+            <input id="inp-name" placeholder="e.g. Fushimi Inari, Tokyo Tower…" autocomplete="off" inputmode="search"/>
+            <div id="spin"></div>
+            <div id="sugg"></div>
+          </div>
+          <div id="sel-badge">
+            <div class="sb-name" id="sb-name"></div>
+            <div class="sb-detail" id="sb-detail"></div>
+            <button id="clr-sel" onclick="clearSel()">✕</button>
+          </div>
+          <span class="fl">Prefecture <span style="font-weight:400;opacity:0.5;text-transform:none;letter-spacing:0">(auto-filled · override if wrong)</span></span>
+          <select id="inp-pref"><option value="">— select —</option></select>
+          <span class="fl">Category</span>
+          <div id="cat-picker">
+            <button class="cat-btn active" data-cat="landmark" onclick="setCat(this)">🏛 Landmark</button>
+            <button class="cat-btn" data-cat="food" onclick="setCat(this)">🍜 Food</button>
+            <button class="cat-btn" data-cat="hotel" onclick="setCat(this)">🏨 Hotel</button>
+            <button class="cat-btn" data-cat="station" onclick="setCat(this)">🚉 Station</button>
+            <button class="cat-btn" data-cat="airport" onclick="setCat(this)">✈️ Airport</button>
+            <button class="cat-btn" data-cat="port" onclick="setCat(this)">⛴ Port</button>
+          </div>
+          <span class="fl">Status</span>
+          <select id="inp-type">
+            <option value="visited">✅ Visited</option>
+            <option value="wishlist">⭐ Wishlist</option>
+          </select>
+          <button class="add-btn" onclick="addLoc()">+ Add Location</button>
+        </div>
+
+        <!-- Mini-map -->
+        <div id="minimap-section">
+          <div id="minimap-head">
+            <h2>Prefecture Overview</h2>
+            <div id="minimap-legend">
+              <div class="mm-leg"><div class="mm-dot" style="background:var(--green)"></div>Visited</div>
+              <div class="mm-leg"><div class="mm-dot" style="background:var(--yellow)"></div>Wishlist</div>
+              <div class="mm-leg"><div class="mm-dot" style="background:rgba(255,255,255,0.12)"></div>None</div>
+            </div>
+          </div>
+          <svg id="minimap-svg" viewBox="0 0 280 340" xmlns="http://www.w3.org/2000/svg">
+            <rect width="280" height="340" fill="rgba(0,0,30,0.5)" rx="6"/>
+            <g id="mm-prefs"></g>
+          </svg>
+        </div>
+        <div id="minimap-tooltip"></div>
+      </div>
+
+      <!-- LOG PANEL — shown on desktop always, mobile Log tab only -->
+      <div id="log-panel">
+        <div id="log-section">
+          <div id="log-head">
+            <h2>Log</h2>
+            <button class="ftab active" onclick="setF('all',this)">All</button>
+            <button class="ftab" onclick="setF('visited',this)">✅</button>
+            <button class="ftab" onclick="setF('wishlist',this)">⭐</button>
+            <button class="ftab" onclick="setF('station',this)">🚉</button>
+            <button class="ftab" onclick="setF('airport',this)">✈️</button>
+            <button class="ftab" onclick="setF('port',this)">⛴</button>
+          </div>
+          <div id="log-controls">
+            <span>Sort</span>
+            <button class="sort-btn active" id="sort-added" onclick="setSort('added',this)">Recent</button>
+            <button class="sort-btn" id="sort-name" onclick="setSort('name',this)">A–Z</button>
+            <button class="sort-btn" id="sort-pref" onclick="setSort('pref',this)">Prefecture</button>
+            <button class="sort-btn" id="sort-cat" onclick="setSort('cat',this)">Category</button>
+            <button class="sort-dir" id="sort-dir-btn" onclick="toggleSortDir()" title="Reverse order">↓</button>
+          </div>
+          <div id="loc-list"><div class="empty">No locations yet — search above to add one.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab bar (mobile only) -->
+  <div id="tab-bar" style="display:none">
+    <button class="tab-btn active" id="tab-map" onclick="switchTab('map')">
+      <span class="tab-icon">🗺</span>Map
+    </button>
+    <button class="tab-btn" id="tab-add" onclick="switchTab('add')">
+      <span class="tab-icon">＋</span>Add
+    </button>
+    <button class="tab-btn" id="tab-log" onclick="switchTab('log')">
+      <span class="tab-icon">📋</span>Log
+    </button>
+  </div>
+
+  <!-- Footer (desktop only) -->
+  <div id="footer">
+    <div class="meta-cell"><div class="mk">Composition</div><div class="mv">47 Prefectures</div></div>
+    <div class="meta-cell"><div class="mk">Coverage</div><div class="mv" id="meta-cov">0 of 47</div></div>
+  </div>
+</div>
+
+<script>
+// ── Prefecture data ───────────────────────────────────
+const PCENTER={Hokkaido:[43.2,142.8],Aomori:[40.8,140.7],Iwate:[39.7,141.1],Miyagi:[38.3,140.9],Akita:[39.7,140.1],Yamagata:[38.2,140.3],Fukushima:[37.4,140.1],Ibaraki:[36.3,140.4],Tochigi:[36.6,139.9],Gunma:[36.4,139.0],Saitama:[35.9,139.6],Chiba:[35.6,140.1],Tokyo:[35.69,139.69],Kanagawa:[35.4,139.4],Niigata:[37.9,139.0],Toyama:[36.7,137.2],Ishikawa:[36.6,136.6],Fukui:[36.1,136.2],Yamanashi:[35.7,138.6],Nagano:[36.7,138.2],Shizuoka:[35.0,138.4],Aichi:[35.2,136.9],Mie:[34.7,136.5],Shiga:[35.0,136.0],Kyoto:[35.0,135.8],Osaka:[34.7,135.5],Hyogo:[34.7,135.2],Nara:[34.7,135.8],Wakayama:[34.2,135.2],Tottori:[35.5,134.2],Shimane:[35.5,133.1],Okayama:[34.7,133.9],Hiroshima:[34.4,132.5],Yamaguchi:[34.2,131.5],Tokushima:[34.1,134.6],Kagawa:[34.3,134.0],Ehime:[33.8,132.8],Kochi:[33.6,133.5],Fukuoka:[33.6,130.4],Saga:[33.2,130.3],Nagasaki:[32.8,129.9],Kumamoto:[32.8,130.7],Oita:[33.2,131.6],Miyazaki:[31.9,131.4],Kagoshima:[31.6,130.6],Okinawa:[26.2,127.7],Gifu:[35.4,136.7]};
+
+// Complete Japanese → English prefecture name map
+const JP2EN={"北海道":"Hokkaido","青森県":"Aomori","青森":"Aomori","岩手県":"Iwate","岩手":"Iwate","宮城県":"Miyagi","宮城":"Miyagi","秋田県":"Akita","秋田":"Akita","山形県":"Yamagata","山形":"Yamagata","福島県":"Fukushima","福島":"Fukushima","茨城県":"Ibaraki","茨城":"Ibaraki","栃木県":"Tochigi","栃木":"Tochigi","群馬県":"Gunma","群馬":"Gunma","埼玉県":"Saitama","埼玉":"Saitama","千葉県":"Chiba","千葉":"Chiba","東京都":"Tokyo","東京":"Tokyo","神奈川県":"Kanagawa","神奈川":"Kanagawa","新潟県":"Niigata","新潟":"Niigata","富山県":"Toyama","富山":"Toyama","石川県":"Ishikawa","石川":"Ishikawa","福井県":"Fukui","福井":"Fukui","山梨県":"Yamanashi","山梨":"Yamanashi","長野県":"Nagano","長野":"Nagano","静岡県":"Shizuoka","静岡":"Shizuoka","愛知県":"Aichi","愛知":"Aichi","三重県":"Mie","三重":"Mie","滋賀県":"Shiga","滋賀":"Shiga","京都府":"Kyoto","京都":"Kyoto","大阪府":"Osaka","大阪":"Osaka","兵庫県":"Hyogo","兵庫":"Hyogo","奈良県":"Nara","奈良":"Nara","和歌山県":"Wakayama","和歌山":"Wakayama","鳥取県":"Tottori","鳥取":"Tottori","島根県":"Shimane","島根":"Shimane","岡山県":"Okayama","岡山":"Okayama","広島県":"Hiroshima","広島":"Hiroshima","山口県":"Yamaguchi","山口":"Yamaguchi","徳島県":"Tokushima","徳島":"Tokushima","香川県":"Kagawa","香川":"Kagawa","愛媛県":"Ehime","愛媛":"Ehime","高知県":"Kochi","高知":"Kochi","福岡県":"Fukuoka","福岡":"Fukuoka","佐賀県":"Saga","佐賀":"Saga","長崎県":"Nagasaki","長崎":"Nagasaki","熊本県":"Kumamoto","熊本":"Kumamoto","大分県":"Oita","大分":"Oita","宮崎県":"Miyazaki","宮崎":"Miyazaki","鹿児島県":"Kagoshima","鹿児島":"Kagoshima","沖縄県":"Okinawa","沖縄":"Okinawa","岐阜県":"Gifu","岐阜":"Gifu"};
+
+// JIS prefecture ID → English name (unambiguous, no string matching)
+const ID2EN={"01":"Hokkaido","02":"Aomori","03":"Iwate","04":"Miyagi","05":"Akita","06":"Yamagata","07":"Fukushima","08":"Ibaraki","09":"Tochigi","10":"Gunma","11":"Saitama","12":"Chiba","13":"Tokyo","14":"Kanagawa","15":"Niigata","16":"Toyama","17":"Ishikawa","18":"Fukui","19":"Yamanashi","20":"Nagano","21":"Gifu","22":"Shizuoka","23":"Aichi","24":"Mie","25":"Shiga","26":"Kyoto","27":"Osaka","28":"Hyogo","29":"Nara","30":"Wakayama","31":"Tottori","32":"Shimane","33":"Okayama","34":"Hiroshima","35":"Yamaguchi","36":"Tokushima","37":"Kagawa","38":"Ehime","39":"Kochi","40":"Fukuoka","41":"Saga","42":"Nagasaki","43":"Kumamoto","44":"Oita","45":"Miyazaki","46":"Kagoshima","47":"Okinawa"};
+
+// Resolve GeoJSON feature → our English pref name
+function resolveGeoName(props){
+  // 1. Try numeric JIS ID first — most reliable
+  const rawId=props.id||props.ID||props.pref_id||'';
+  const id=String(rawId).padStart(2,'0');
+  if(ID2EN[id])return ID2EN[id];
+
+  // 2. Try exact English name match
+  const en=props.nam_en||props.name_1||props.NAME_1||props.name||props.NAME||'';
+  if(PCENTER[en])return en;
+
+  // 3. Try Japanese → English lookup (no partial matching)
+  const jp=props.nam_ja||props.nam||props.name||props.NAME||'';
+  if(JP2EN[jp])return JP2EN[jp];
+  // Also try stripping prefecture suffix
+  const jpClean=jp.replace(/[県都道府]$/,'');
+  if(JP2EN[jpClean])return JP2EN[jpClean];
+
+  // 4. Exact case-insensitive English match only (no partial/substring)
+  const enLow=en.toLowerCase();
+  const exact=Object.keys(PCENTER).find(k=>k.toLowerCase()===enLow);
+  if(exact)return exact;
+
+  return en||jp||'';
+}
+
+// ── App state ────────────────────────────────────────
+const SAMPLE=[
+  {id:1,name:"Senso-ji Temple",pref:"Tokyo",type:"visited",category:"landmark",lat:35.7148,lng:139.7967},
+  {id:2,name:"Fushimi Inari",pref:"Kyoto",type:"visited",category:"landmark",lat:34.9671,lng:135.7727},
+  {id:3,name:"Dotonbori",pref:"Osaka",type:"visited",category:"food",lat:34.6687,lng:135.5013},
+  {id:4,name:"Mt. Fuji",pref:"Shizuoka",type:"wishlist",category:"landmark",lat:35.3606,lng:138.7274},
+  {id:5,name:"Peace Memorial Park",pref:"Hiroshima",type:"visited",category:"landmark",lat:34.3955,lng:132.4534},
+  {id:6,name:"Arashiyama Bamboo Grove",pref:"Kyoto",type:"visited",category:"landmark",lat:35.0094,lng:135.672},
+  {id:7,name:"Shirakawa-go",pref:"Gifu",type:"wishlist",category:"landmark",lat:36.2575,lng:136.906}
+];
+let locs=[];
+try{locs=JSON.parse(localStorage.getItem('jpn-v3')||'null')||JSON.parse(JSON.stringify(SAMPLE));}
+catch(e){locs=JSON.parse(JSON.stringify(SAMPLE));}
+let nid=Math.max(...locs.map(l=>l.id),0)+1,filt='all',selId=null;
+let map,prefLayer=null,markers={},selectedResult=null,searchTimer=null,activeIdx=-1;
+
+// ── Geocoding ────────────────────────────────────────
+async function geocode(q){
+  // Strategy 1: exact query in Japan
+  const base='https://nominatim.openstreetmap.org/search';
+  const headers={'User-Agent':'JapanTravelLog/1.0','Accept-Language':'en'};
+
+  // Run two queries in parallel: strict (name only) + broad (full text)
+  const [r1,r2]=await Promise.allSettled([
+    fetch(`${base}?q=${encodeURIComponent(q)}&format=json&limit=8&countrycodes=jp&addressdetails=1&namedetails=1`,{headers}).then(r=>r.json()),
+    fetch(`${base}?q=${encodeURIComponent(q+' Japan')}&format=json&limit=8&countrycodes=jp&addressdetails=1&namedetails=1`,{headers}).then(r=>r.json()),
+  ]);
+
+  const res1=r1.status==='fulfilled'?r1.value:[];
+  const res2=r2.status==='fulfilled'?r2.value:[];
+
+  // Merge and deduplicate by place_id
+  const seen=new Set();
+  const merged=[];
+  for(const r of [...res1,...res2]){
+    if(!seen.has(r.place_id)){seen.add(r.place_id);merged.push(r);}
+  }
+
+  // Score results: boost ones where name matches query closely
+  const ql=q.toLowerCase();
+  merged.sort((a,b)=>{
+    const an=(a.namedetails?.name||a.name||'').toLowerCase();
+    const bn=(b.namedetails?.name||b.name||'').toLowerCase();
+    const aMatch=an===ql?2:an.includes(ql)?1:0;
+    const bMatch=bn===ql?2:bn.includes(ql)?1:0;
+    return bMatch-aMatch;
+  });
+
+  return merged.slice(0,8);
+}
+
+function extractPref(address){
+  const state=address.state||address.province||'';
+  // 1. Direct Japanese lookup
+  if(JP2EN[state])return JP2EN[state];
+  // 2. Strip suffix and try again
+  const clean=state.replace(/ Prefecture$/i,'').replace(/[\u770c\u90fd\u9053\u5e9c]$/,'').trim();
+  if(JP2EN[clean])return JP2EN[clean];
+  // 3. Exact English match (case-insensitive, no partial)
+  const exact=Object.keys(PCENTER).find(p=>p.toLowerCase()===clean.toLowerCase());
+  if(exact)return exact;
+  return clean||'Unknown';
+}
+
+function showSugg(results){
+  const box=document.getElementById('sugg');
+  box._results=results;
+  let html='';
+  if(!results.length){
+    html='<div class="no-res">No results — try different spelling or paste Google Maps coords below</div>';
+  } else {
+    html=results.map((r,i)=>{
+      const pref=extractPref(r.address||{});
+      const parts=r.display_name.split(',');
+      const detail=parts.slice(1,3).join(',').trim();
+      const name=r.namedetails?.name||r.name||parts[0];
+      return `<div class="sug" data-i="${i}" onclick="pickSug(${i})">
+        <div class="sug-name">${name}</div>
+        <div class="sug-detail">${pref} · ${detail}</div>
+      </div>`;
+    }).join('');
+  }
+  // Always show coords fallback option at bottom
+  html+=`<div class="sug sug-manual" onclick="showCoordEntry()">
+    <div class="sug-name" style="color:#93c5fd">📍 Enter coordinates manually</div>
+    <div class="sug-detail">Paste from Google Maps if not found above</div>
+  </div>`;
+  box.innerHTML=html;
+  box.style.display='block';
+  activeIdx=-1;
+}
+
+function showCoordEntry(){
+  hideSugg();
+  const coords=window.prompt(
+    'Paste coordinates from Google Maps\n(e.g. "35.6762, 139.6503" or just the decimal pair)',
+    ''
+  );
+  if(!coords)return;
+  const match=coords.match(/(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
+  if(!match){alert('Could not read coordinates. Try format: 35.6762, 139.6503');return;}
+  const lat=+match[1],lng=+match[2];
+  if(lat<20||lat>47||lng<122||lng>154){
+    alert('Those coordinates are outside Japan. Please check and try again.');return;
+  }
+  const name=document.getElementById('inp-name').value.trim()||'Custom Location';
+  selectedResult={name,lat,lng,pref:''};
+  document.getElementById('sb-name').textContent=name;
+  document.getElementById('sb-detail').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  document.getElementById('sel-badge').style.display='block';
+  map.flyTo([lat,lng],15,{duration:0.7});
+}
+
+function pickSug(i){
+  const results=document.getElementById('sugg')._results||[];
+  const r=results[i];if(!r)return;
+  const pref=extractPref(r.address||{});
+  const name=r.name||r.display_name.split(',')[0];
+  selectedResult={name,lat:+r.lat,lng:+r.lon,pref};
+  document.getElementById('sb-name').textContent=name;
+  document.getElementById('sb-detail').textContent=pref+' · '+r.display_name.split(',').slice(1,3).join(',').trim();
+  document.getElementById('sel-badge').style.display='block';
+  document.getElementById('inp-name').value=name;
+  // Auto-set prefecture dropdown (user can override)
+  const prefSel=document.getElementById('inp-pref');
+  if(pref&&prefSel)prefSel.value=pref;
+  hideSugg();
+  map.flyTo([selectedResult.lat,selectedResult.lng],14,{duration:0.7});
+}
+
+function clearSel(){
+  selectedResult=null;
+  document.getElementById('sel-badge').style.display='none';
+  document.getElementById('inp-name').value='';
+  document.getElementById('inp-pref').value='';
+}
+function hideSugg(){document.getElementById('sugg').style.display='none';}
+
+document.getElementById('inp-name').addEventListener('input',function(){
+  const q=this.value.trim();
+  clearTimeout(searchTimer);hideSugg();
+  if(selectedResult&&selectedResult.name!==q){selectedResult=null;document.getElementById('sel-badge').style.display='none';}
+  if(q.length<2){document.getElementById('spin').style.display='none';return;}
+  document.getElementById('spin').style.display='block';
+  searchTimer=setTimeout(async()=>{
+    try{const res=await geocode(q);showSugg(res);}
+    catch(e){document.getElementById('sugg').innerHTML='<div class="no-res">Search unavailable</div>';document.getElementById('sugg').style.display='block';}
+    finally{document.getElementById('spin').style.display='none';}
+  },420);
+});
+
+document.getElementById('inp-name').addEventListener('keydown',function(e){
+  const box=document.getElementById('sugg');
+  const items=box.querySelectorAll('.sug');
+  if(e.key==='ArrowDown'){e.preventDefault();activeIdx=Math.min(activeIdx+1,items.length-1);items.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));}
+  else if(e.key==='ArrowUp'){e.preventDefault();activeIdx=Math.max(activeIdx-1,0);items.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));}
+  else if(e.key==='Enter'&&activeIdx>=0){e.preventDefault();pickSug(activeIdx);}
+  else if(e.key==='Escape')hideSugg();
+});
+document.addEventListener('click',e=>{if(!document.getElementById('search-wrap').contains(e.target))hideSugg();});
+
+// ── Map ──────────────────────────────────────────────
+function status(n){
+  const ls=locs.filter(l=>l.pref===n);
+  if(!ls.length)return null;
+  return ls.some(l=>l.type==='visited')?'visited':'wishlist';
+}
+
+function prefStyle(feature){
+  const n=resolveGeoName(feature.properties);
+  const s=status(n);
+  if(s==='visited')return{fillColor:'#4ade80',fillOpacity:0.32,color:'#22c55e',weight:2,opacity:1};
+  if(s==='wishlist')return{fillColor:'#fcd34d',fillOpacity:0.3,color:'#f59e0b',weight:1.5,opacity:1};
+  return{fillColor:'transparent',fillOpacity:0,color:'transparent',weight:0,opacity:0};
+}
+
+// Category definitions: emoji, pin colour, inner SVG symbol (viewBox 0 0 32 40, pin body centre ~16,14)
+const CAT={
+  landmark:{emoji:'🏛', color:'#60a5fa', sym:(c)=>`<rect x="11" y="9" width="10" height="8" rx="1" fill="${c}"/><rect x="9" y="16" width="14" height="2" rx="0.5" fill="${c}"/>`},
+  food:    {emoji:'🍜', color:'#fb923c', sym:(c)=>`<ellipse cx="16" cy="13" rx="5" ry="3.5" fill="${c}"/><line x1="16" y1="9.5" x2="16" y2="16.5" stroke="${c}" stroke-width="1.5" stroke-linecap="round"/>`},
+  hotel:   {emoji:'🏨', color:'#a78bfa', sym:(c)=>`<rect x="11" y="9" width="10" height="8" rx="1" fill="${c}"/><rect x="13" y="11" width="2.5" height="2.5" rx="0.3" fill="rgba(255,255,255,0.5)"/><rect x="16.5" y="11" width="2.5" height="2.5" rx="0.3" fill="rgba(255,255,255,0.5)"/>`},
+  station: {emoji:'🚉', color:'#34d399', sym:(c)=>`<rect x="10" y="9" width="12" height="7" rx="2" fill="${c}"/><circle cx="13" cy="17.5" r="1.5" fill="${c}"/><circle cx="19" cy="17.5" r="1.5" fill="${c}"/><line x1="13" y1="16" x2="19" y2="16" stroke="${c}" stroke-width="1"/>`},
+  airport: {emoji:'✈️', color:'#38bdf8', sym:(c)=>`<path d="M16 8 L16 18 M10 14 L22 14 M12 17 L20 17" stroke="${c}" stroke-width="2" stroke-linecap="round" fill="none"/>`},
+  port:    {emoji:'⛴',  color:'#2dd4bf', sym:(c)=>`<path d="M10 15 Q16 11 22 15 L21 18 L11 18 Z" fill="${c}"/><rect x="15" y="9" width="2" height="6" rx="0.5" fill="${c}"/>`},
+};
+const CAT_DEFAULT=CAT.landmark;
+
+function makeIcon(loc){
+  const cat=CAT[loc.category]||CAT_DEFAULT;
+  const inner='rgba(0,0,60,0.4)';
+  const pinColor=cat.color;
+  const sel=loc.id===selId;
+  const statusColor=loc.type==='visited'?'#4ade80':'#f59e0b';
+  return L.divIcon({
+    html:`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+      <filter id="dsf"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.45"/></filter>
+      <path d="M16 2C10 2 5 7 5 13c0 9 11 27 11 27s11-18 11-27C27 7 22 2 16 2z"
+        fill="${pinColor}" stroke="${sel?'white':'rgba(0,0,0,0.2)'}" stroke-width="${sel?2.5:1}" filter="url(#dsf)"/>
+      ${cat.sym(inner)}
+      <circle cx="16" cy="32" r="3" fill="${statusColor}" stroke="white" stroke-width="1.5"/>
+    </svg>`,
+    iconSize:[32,42],iconAnchor:[16,42],popupAnchor:[0,-44],className:''
+  });
+}
+
+function renderMarkers(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  markers={};
+  locs.forEach(loc=>{
+    if(!loc.lat||!loc.lng)return;
+    const m=L.marker([loc.lat,loc.lng],{icon:makeIcon(loc),zIndexOffset:loc.id===selId?1000:0}).addTo(map);
+    const popCat=CAT[loc.category]||CAT_DEFAULT;
+    m.bindPopup(`<div style="font-family:'Inter',sans-serif">
+      <div style="font-weight:900;font-size:14px;margin-bottom:3px">${popCat.emoji} ${loc.name}</div>
+      <div style="font-size:11px;opacity:0.65">${loc.pref} Prefecture</div>
+      <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap">
+        <span style="font-size:11px;padding:3px 10px;border-radius:12px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25)">
+          ${loc.type==='visited'?'✅ Visited':'⭐ Wishlist'}
+        </span>
+        <span style="font-size:11px;padding:3px 10px;border-radius:12px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2)">
+          ${popCat.emoji} ${(loc.category||'landmark').charAt(0).toUpperCase()+(loc.category||'landmark').slice(1)}
+        </span>
+      </div>
+    </div>`);
+    m.on('click',()=>selLoc(loc.id,false));
+    markers[loc.id]=m;
+  });
+}
+
+function renderPrefs(geo){
+  if(prefLayer){map.removeLayer(prefLayer);prefLayer=null;}
+  prefLayer=L.geoJSON(geo,{
+    style:prefStyle,
+    onEachFeature:(feature,layer)=>{
+      const n=resolveGeoName(feature.properties);
+      layer.on({
+        mouseover(e){
+          const s=status(n);
+          if(!s)layer.setStyle({fillColor:'#93c5fd',fillOpacity:0.15,color:'#93c5fd',weight:1,opacity:0.5});
+          else layer.setStyle({fillOpacity:s==='visited'?0.52:0.48});
+          layer.bindTooltip(`<span style="font-family:'Inter',sans-serif;font-weight:700;font-size:13px">${n}</span>`,{sticky:true}).openTooltip(e.latlng);
+        },
+        mouseout(){layer.closeTooltip();layer.setStyle(prefStyle(feature));},
+        click(){const c=PCENTER[n];if(c)map.flyTo(c,9,{duration:0.6});}
+      });
+    }
+  }).addTo(map);
+}
+
+// ── TRAIN LAYERS ─────────────────────────────────────────────────────
+// Using OpenRailwayMap tiles — free public tile service for railway data
+const TRAIN_LAYERS={
+  shinkansen:{
+    url:'https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
+    // We filter visually via CSS opacity but use the maxspeed layer for Shinkansen
+    // Actually use the OpenRailwayMap maxspeed layer which highlights high-speed lines in red
+    urlAlt:'https://tiles.openrailwaymap.org/maxspeed/{z}/{x}/{y}.png',
+    active:false, layer:null,
+    attr:'© <a href="https://www.openrailwaymap.org">OpenRailwayMap</a>'
+  },
+  trains:{
+    url:'https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
+    active:false, layer:null,
+    attr:'© <a href="https://www.openrailwaymap.org">OpenRailwayMap</a>'
+  },
+  subway:{
+    url:'https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
+    active:false, layer:null,
+    attr:'© <a href="https://www.openrailwaymap.org">OpenRailwayMap</a>'
+  }
+};
+
+// Since OpenRailwayMap uses a single "standard" layer for all railways,
+// we use their specialized layers:
+// - maxspeed: colours lines by speed, great for seeing Shinkansen (red = 250km/h+)
+// - standard: all railway infrastructure
+// For subway specifically we can't get a separate tile layer without a key,
+// so we use standard at high zoom where subways become visible
+
+function toggleLayer(key){
+  const cfg=TRAIN_LAYERS[key];
+  if(!cfg)return;
+  cfg.active=!cfg.active;
+  const btn=document.getElementById('btn-'+key);
+  btn?.classList.toggle('active',cfg.active);
+
+  if(cfg.active){
+    // Choose the right tile URL per layer type
+    let tileUrl;
+    if(key==='shinkansen'){
+      // maxspeed layer shows Shinkansen prominently in red/orange
+      tileUrl='https://tiles.openrailwaymap.org/maxspeed/{z}/{x}/{y}.png';
+    } else if(key==='trains'){
+      tileUrl='https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png';
+    } else {
+      // subway - standard layer, works best at zoom 12+
+      tileUrl='https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png';
+    }
+    cfg.layer=L.tileLayer(tileUrl,{
+      maxZoom:19,
+      minZoom:5,
+      opacity: key==='shinkansen'?0.9:key==='subway'?0.75:0.85,
+      attribution:cfg.attr,
+      zIndex: key==='shinkansen'?450:key==='trains'?440:430,
+      bounds: L.latLngBounds(L.latLng(24.0,122.5), L.latLng(46.0,146.5))
+    }).addTo(map);
+
+    // Hint for subway
+    if(key==='subway'&&map.getZoom()<11){
+      map.flyTo(map.getCenter(),12,{duration:0.5});
+    }
+  } else {
+    if(cfg.layer){map.removeLayer(cfg.layer);cfg.layer=null;}
+  }
+}
+
+function selLoc(id,fly=true){
+  selId=id;
+  const loc=locs.find(l=>l.id===id);
+  if(fly&&loc?.lat){
+    map.flyTo([loc.lat,loc.lng],14,{duration:0.7});
+    if(window.innerWidth<=640)switchTab('map');
+  }
+  renderMarkers();drawList();
+  if(markers[id])setTimeout(()=>markers[id].openPopup(),750);
+}
+
+function addLoc(){
+  const type=document.getElementById('inp-type').value;
+  if(!selectedResult){
+    if(!document.getElementById('inp-name').value.trim()){alert('Search for a place first.');return;}
+    alert('Please pick a result from the dropdown to get the exact location.');return;
+  }
+  // Use manually selected prefecture if set, otherwise fall back to geocoded one
+  const manualPref=document.getElementById('inp-pref').value;
+  const pref=manualPref||selectedResult.pref||'Unknown';
+  const category=document.querySelector('#cat-picker .cat-btn.active')?.dataset?.cat||'landmark';
+  const loc={id:nid++,name:selectedResult.name,pref,type,category,lat:selectedResult.lat,lng:selectedResult.lng};
+  locs.unshift(loc);save();
+  if(window._geo)renderPrefs(window._geo);
+  renderMarkers();drawList();updateStats();
+  selLoc(loc.id);clearSel();
+  if(window.innerWidth<=640)switchTab('map');
+}
+
+function delLoc(id,e){
+  e.stopPropagation();
+  locs=locs.filter(l=>l.id!==id);
+  if(markers[id]){map.removeLayer(markers[id]);delete markers[id];}
+  if(selId===id)selId=null;
+  save();if(window._geo)renderPrefs(window._geo);drawList();updateStats();
+}
+
+function changePref(id,newPref){
+  const loc=locs.find(l=>l.id===id);
+  if(!loc||!newPref)return;
+  loc.pref=newPref;
+  save();
+  if(window._geo)renderPrefs(window._geo);
+  updateStats();
+}
+
+function changeCategory(id,newCat){
+  const loc=locs.find(l=>l.id===id);
+  if(!loc||!newCat)return;
+  loc.category=newCat;
+  save();renderMarkers();drawList();
+}
+
+let _selCat='landmark';
+function setCat(el){
+  _selCat=el.dataset.cat;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+let catFilt='all';
+function setF(f,el){
+  filt=f;document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('active'));el.classList.add('active');drawList();
+}
+
+let sortKey='added', sortDir=1; // 1=asc/recent-first, -1=desc
+function setSort(key,el){
+  sortKey=key;
+  document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  drawList();
+}
+function toggleSortDir(){
+  sortDir*=-1;
+  document.getElementById('sort-dir-btn').textContent=sortDir===1?'↓':'↑';
+  drawList();
+}
+function sortLocs(arr){
+  const a=[...arr];
+  a.sort((x,y)=>{
+    let v=0;
+    if(sortKey==='added') v=y.id-x.id; // newest first by default
+    else if(sortKey==='name') v=x.name.localeCompare(y.name);
+    else if(sortKey==='pref') v=x.pref.localeCompare(y.pref)||x.name.localeCompare(y.name);
+    else if(sortKey==='cat') v=(x.category||'landmark').localeCompare(y.category||'landmark')||x.name.localeCompare(y.name);
+    return v*sortDir;
+  });
+  return a;
+}
+
+// Track which groups are collapsed
+const collapsedGroups=new Set();
+
+function toggleGroup(pref){
+  if(collapsedGroups.has(pref))collapsedGroups.delete(pref);
+  else collapsedGroups.add(pref);
+  // Just toggle the class — no redraw needed
+  const grpEl=document.getElementById('pg-'+CSS.escape(pref));
+  if(!grpEl)return;
+  grpEl.classList.toggle('collapsed',collapsedGroups.has(pref));
+  // Fix body max-height
+  const body=grpEl.querySelector('.pref-group-body');
+  if(body){
+    if(collapsedGroups.has(pref)){body.style.maxHeight='0';}
+    else{body.style.maxHeight=body.scrollHeight+'px';}
+  }
+}
+
+function locRow(loc,idx){
+  const opts=Object.keys(PCENTER).sort().map(p=>`<option value="${p}"${p===loc.pref?' selected':''}>${p}</option>`).join('');
+  const rowCat=CAT[loc.category]||CAT_DEFAULT;
+  const catOpts=Object.keys(CAT).map(k=>`<option value="${k}"${k===(loc.category||'landmark')?' selected':''}>${CAT[k].emoji} ${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join('');
+  const isAlt=idx%2===1;
+  return `<div class="loc-row${isAlt?' alt':''}${loc.id===selId?' sel':''}" onclick="selLoc(${loc.id})">
+    <div class="loc-cat-icon" style="color:${rowCat.color}">${rowCat.emoji}</div>
+    <div class="loc-info">
+      <div class="loc-name">${loc.name}</div>
+      <div style="display:flex;gap:5px;margin-top:2px">
+        <select class="loc-pref-sel" style="flex:1;min-width:0" onclick="event.stopPropagation()" onchange="changePref(${loc.id},this.value)">${opts}</select>
+        <select class="loc-cat-sel" style="flex:0 0 auto;width:auto;min-width:80px" onclick="event.stopPropagation()" onchange="changeCategory(${loc.id},this.value)">${catOpts}</select>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;flex-shrink:0">
+      <div class="loc-dot ${loc.type==='visited'?'dot-v':'dot-w'}" style="margin:0"></div>
+      <button class="loc-del" onclick="delLoc(${loc.id},event)" aria-label="Remove">✕</button>
+    </div>
+  </div>`;
+}
+
+function drawList(){
+  const el=document.getElementById('loc-list');
+  const filtered=sortLocs(locs.filter(l=>(filt==='all'||l.type===filt||l.category===filt)));
+  if(!filtered.length){el.innerHTML='<div class="empty">No locations yet — tap Add to get started.</div>';return;}
+
+  // Group by prefecture
+  const groups={};
+  filtered.forEach(loc=>{
+    const p=loc.pref||'Unknown';
+    if(!groups[p])groups[p]=[];
+    groups[p].push(loc);
+  });
+
+  // Sort group keys
+  const sortedPrefs=Object.keys(groups).sort((a,b)=>a.localeCompare(b));
+
+  el.innerHTML=sortedPrefs.map(pref=>{
+    const items=groups[pref];
+    const vCount=items.filter(l=>l.type==='visited').length;
+    const wCount=items.filter(l=>l.type==='wishlist').length;
+    const isCollapsed=collapsedGroups.has(pref);
+    const bodyContent=items.map((loc,i)=>locRow(loc,i)).join('');
+    const safeId='pg-'+pref.replace(/[^a-zA-Z0-9]/g,'-');
+    return `<div class="pref-group${isCollapsed?' collapsed':''}" id="${safeId}">
+      <div class="pref-group-header" onclick="toggleGroup('${pref.replace(/'/g,"\'")}')">
+        <span class="pg-chevron">▼</span>
+        <span class="pg-name">${pref}</span>
+        <div class="pg-badges">
+          ${vCount?`<span class="pg-count pg-v">✅ ${vCount}</span>`:''}
+          ${wCount?`<span class="pg-count pg-w">⭐ ${wCount}</span>`:''}
+        </div>
+      </div>
+      <div class="pref-group-body" style="max-height:${isCollapsed?'0':items.length*80+'px'}">
+        ${bodyContent}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateStats(){
+  const v=locs.filter(l=>l.type==='visited').length;
+  const w=locs.filter(l=>l.type==='wishlist').length;
+  const p=new Set(locs.map(l=>l.pref)).size;
+  document.getElementById('sv').textContent=v;
+  document.getElementById('sw').textContent=w;
+  document.getElementById('sp').textContent=p;
+  document.getElementById('meta-cov').textContent=p+' of 47';
+  document.getElementById('subtitle').textContent=v+' place'+(v!==1?'s':'')+' visited · '+p+' prefecture'+(p!==1?'s':'');
+  renderMiniMap();
+}
+
+function save(){try{localStorage.setItem('jpn-v3',JSON.stringify(locs));}catch(e){}}
+
+// ── Mobile tab switching ─────────────────────────────────────────────
+let currentTab='map';
+function switchTab(tab){
+  if(window.innerWidth>640)return;
+  currentTab=tab;
+  const mapEl=document.getElementById('map-wrap');
+  const panelEl=document.getElementById('panel');
+  const addPanelEl=document.getElementById('add-panel');
+  const logPanelEl=document.getElementById('log-panel');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab)?.classList.add('active');
+
+  // Hide all
+  mapEl.classList.add('tab-hidden');
+  panelEl.classList.remove('tab-active');
+  addPanelEl.classList.remove('mob-active');
+  logPanelEl.classList.remove('mob-active');
+
+  if(tab==='map'){
+    mapEl.classList.remove('tab-hidden');
+    setTimeout(()=>{if(map)map.invalidateSize();},50);
+  } else {
+    panelEl.classList.add('tab-active');
+    if(tab==='add'){
+      addPanelEl.classList.add('mob-active');
+    } else if(tab==='log'){
+      logPanelEl.classList.add('mob-active');
+    }
+  }
+}
+
+function initMobileLayout(){
+  if(window.innerWidth<=640){
+    document.getElementById('tab-bar').style.display='flex';
+    // Show map tab initially
+    switchTab('map');
+  }
+}
+window.addEventListener('resize',()=>{
+  if(window.innerWidth>640){
+    // Reset to desktop layout
+    document.getElementById('tab-bar').style.display='none';
+    document.getElementById('map').classList.remove('tab-hidden');
+    document.getElementById('panel').classList.remove('tab-active');
+    document.getElementById('panel').style.display='';
+  } else {
+    document.getElementById('tab-bar').style.display='flex';
+    switchTab(currentTab);
+  }
+});
+
+// ── MINI-MAP ─────────────────────────────────────────
+// Prefecture polygons scaled to fit viewBox="0 0 280 340"
+// Coordinates: [x, y] in SVG space
+// Japan bounding box: lng 128.3–145.8, lat 26.0–45.5
+// Map: x = (lng - 128.3) / (145.8-128.3) * 250 + 15
+//       y = (45.5 - lat) / (45.5-26.0) * 310 + 15
+const W=250,H=310,lng0=128.3,lat0=45.5,dlng=17.5,dlat=19.5;
+function mm(lng,lat){return[(lng-lng0)/dlng*W+15,(lat0-lat)/dlat*H+15];}
+function mmPts(coords){return coords.map(([lng,lat])=>mm(lng,lat).join(',')).join(' ');}
+
+const MM_PREFS=[
+  ["Hokkaido",[[141.38,45.52],[143.0,44.15],[145.82,44.4],[145.0,43.28],[144.0,43.55],[143.5,42.3],[141.5,41.5],[140.3,41.5],[140.0,42.6],[140.0,43.5],[140.5,44.5],[141.38,45.52]]],
+  ["Aomori",[[140.3,41.5],[141.5,41.5],[141.8,41.1],[141.5,40.4],[141.0,40.35],[140.6,40.3],[140.0,40.6],[140.0,41.2],[140.3,41.5]]],
+  ["Iwate",[[141.5,41.5],[141.8,41.8],[142.0,40.8],[141.5,39.8],[141.2,39.6],[141.0,40.35],[141.5,40.4],[141.8,41.1],[141.5,41.5]]],
+  ["Miyagi",[[141.0,38.75],[141.8,38.8],[141.8,39.5],[141.5,39.8],[141.2,39.6],[140.7,39.8],[140.5,39.1],[141.0,38.75]]],
+  ["Akita",[[140.0,40.6],[140.6,40.3],[141.0,40.35],[140.7,39.8],[140.5,39.1],[140.1,38.9],[139.5,39.5],[139.5,40.5],[140.0,40.6]]],
+  ["Yamagata",[[140.5,39.1],[140.7,39.8],[141.2,39.6],[141.0,38.75],[140.5,38.4],[140.2,38.0],[139.8,38.2],[139.6,38.6],[140.1,38.9],[140.5,39.1]]],
+  ["Fukushima",[[139.8,38.2],[140.2,38.0],[140.5,38.4],[141.0,38.75],[141.8,37.8],[141.0,37.0],[140.3,36.9],[139.5,37.0],[139.3,37.5],[139.8,38.2]]],
+  ["Ibaraki",[[140.3,36.9],[141.0,37.0],[141.0,36.1],[140.8,36.0],[140.5,35.7],[139.9,35.7],[139.7,36.1],[140.3,36.9]]],
+  ["Tochigi",[[139.5,37.0],[140.3,36.9],[139.7,36.1],[139.2,36.2],[139.0,36.5],[139.5,37.0]]],
+  ["Gunma",[[139.0,36.5],[139.2,36.2],[138.8,36.0],[138.4,36.0],[138.2,36.5],[138.5,36.8],[139.0,36.5]]],
+  ["Saitama",[[139.7,36.1],[140.5,35.7],[139.9,35.7],[139.5,35.6],[139.0,35.7],[139.2,36.2],[139.7,36.1]]],
+  ["Chiba",[[139.9,35.7],[140.5,35.7],[140.9,35.5],[140.9,35.0],[140.3,34.8],[139.8,34.9],[139.8,35.4],[139.9,35.7]]],
+  ["Tokyo",[[138.95,35.68],[139.5,35.8],[139.9,35.82],[139.92,35.55],[139.7,35.42],[139.3,35.45],[138.95,35.68]]],
+  ["Kanagawa",[[139.0,35.7],[139.5,35.5],[139.7,35.42],[139.5,35.2],[139.1,35.1],[138.85,35.25],[138.9,35.5],[139.0,35.7]]],
+  ["Niigata",[[138.2,36.5],[138.4,36.1],[138.0,36.0],[137.5,37.2],[137.6,38.3],[138.5,38.5],[139.6,38.6],[139.8,38.2],[139.3,37.5],[138.8,37.3],[138.5,37.0],[138.2,36.5]]],
+  ["Toyama",[[136.8,36.3],[137.2,36.4],[137.8,36.6],[138.2,36.5],[138.2,36.0],[137.8,35.8],[137.2,36.0],[136.8,36.3]]],
+  ["Ishikawa",[[136.3,37.4],[136.8,37.0],[136.8,36.3],[136.5,36.0],[136.2,36.0],[136.0,36.5],[136.0,37.2],[136.3,37.4]]],
+  ["Fukui",[[135.8,35.7],[136.2,36.0],[136.5,36.0],[136.5,35.7],[136.2,35.4],[135.8,35.5],[135.8,35.7]]],
+  ["Yamanashi",[[138.2,36.0],[138.8,36.0],[139.0,35.7],[138.8,35.4],[138.5,35.2],[138.0,35.4],[138.2,36.0]]],
+  ["Nagano",[[137.2,36.4],[137.8,36.6],[138.2,36.5],[138.5,36.2],[138.8,36.0],[138.5,35.2],[138.0,35.4],[137.5,35.7],[137.0,36.0],[137.2,36.4]]],
+  ["Shizuoka",[[138.0,35.4],[138.5,35.2],[138.8,35.4],[139.0,35.2],[138.8,34.7],[138.3,34.5],[137.8,34.5],[137.5,34.8],[138.0,35.4]]],
+  ["Aichi",[[136.8,35.3],[137.5,35.7],[137.8,34.9],[137.5,34.6],[136.8,34.6],[136.5,34.8],[136.8,35.3]]],
+  ["Mie",[[136.0,34.7],[136.5,34.8],[136.8,34.6],[136.5,34.2],[136.2,33.8],[135.8,33.8],[135.8,34.3],[136.0,34.7]]],
+  ["Shiga",[[135.8,35.3],[136.3,35.5],[136.5,35.3],[136.3,35.0],[135.9,34.9],[135.7,35.1],[135.8,35.3]]],
+  ["Kyoto",[[135.2,35.7],[135.8,35.7],[136.3,35.5],[135.8,35.3],[135.5,35.0],[135.2,34.9],[135.0,35.2],[135.2,35.7]]],
+  ["Osaka",[[135.2,34.7],[135.8,35.0],[135.8,34.7],[135.5,34.4],[135.2,34.5],[135.2,34.7]]],
+  ["Hyogo",[[134.2,35.5],[135.0,35.7],[135.2,35.7],[135.2,35.2],[135.0,34.9],[134.8,34.8],[134.2,34.8],[134.0,35.0],[134.2,35.5]]],
+  ["Nara",[[135.5,35.0],[135.8,35.0],[136.0,34.7],[135.8,34.3],[135.5,34.3],[135.3,34.5],[135.5,35.0]]],
+  ["Wakayama",[[135.2,34.5],[135.5,34.3],[135.8,34.3],[136.0,34.0],[135.5,33.5],[135.0,33.5],[134.8,34.0],[135.0,34.3],[135.2,34.5]]],
+  ["Tottori",[[133.3,35.5],[134.2,35.5],[134.2,35.0],[133.8,34.8],[133.3,34.8],[133.0,35.2],[133.3,35.5]]],
+  ["Shimane",[[132.0,35.6],[132.5,35.5],[133.0,35.5],[133.3,35.5],[133.0,35.2],[132.5,35.0],[132.0,35.2],[132.0,35.6]]],
+  ["Okayama",[[133.5,35.0],[134.0,35.0],[134.2,35.0],[134.0,34.7],[133.8,34.4],[133.3,34.4],[133.0,34.7],[133.5,35.0]]],
+  ["Hiroshima",[[131.8,34.6],[132.5,35.0],[133.0,35.2],[133.0,34.7],[132.5,34.3],[132.0,34.3],[131.8,34.5],[131.8,34.6]]],
+  ["Yamaguchi",[[130.8,34.5],[131.8,34.5],[131.8,34.6],[132.0,34.3],[131.8,33.8],[131.0,33.8],[130.5,33.9],[130.8,34.5]]],
+  ["Tokushima",[[134.2,34.2],[134.8,34.0],[134.8,33.7],[134.3,33.5],[134.0,33.7],[134.0,34.0],[134.2,34.2]]],
+  ["Kagawa",[[133.5,34.4],[134.2,34.4],[134.2,34.2],[134.0,34.0],[133.5,34.0],[133.3,34.2],[133.5,34.4]]],
+  ["Ehime",[[132.5,34.3],[133.0,34.7],[133.3,34.4],[133.5,34.0],[133.3,33.5],[132.8,33.3],[132.3,33.5],[132.5,34.3]]],
+  ["Kochi",[[132.8,33.8],[133.3,33.8],[134.0,33.7],[134.3,33.5],[133.8,32.8],[133.0,32.8],[132.5,33.3],[132.8,33.8]]],
+  ["Fukuoka",[[130.3,33.8],[130.8,34.2],[131.3,34.2],[131.2,33.5],[130.8,33.3],[130.3,33.3],[130.3,33.8]]],
+  ["Saga",[[129.8,33.5],[130.3,33.8],[130.3,33.3],[130.0,33.0],[129.6,33.2],[129.8,33.5]]],
+  ["Nagasaki",[[129.2,33.3],[129.6,33.2],[130.0,33.0],[129.8,32.5],[129.3,32.5],[128.8,32.8],[129.2,33.3]]],
+  ["Kumamoto",[[130.3,33.3],[130.8,33.3],[131.2,33.5],[131.3,32.8],[130.8,32.3],[130.3,32.3],[130.0,32.8],[130.3,33.3]]],
+  ["Oita",[[130.8,33.8],[131.3,34.2],[131.8,33.8],[131.8,33.3],[131.3,32.8],[130.8,33.3],[130.8,33.8]]],
+  ["Miyazaki",[[131.3,32.8],[131.8,33.3],[131.8,32.5],[131.5,31.5],[131.0,31.5],[130.8,32.0],[131.0,32.5],[131.3,32.8]]],
+  ["Kagoshima",[[130.5,32.3],[130.8,32.3],[131.3,32.0],[131.0,31.3],[130.5,31.0],[130.0,31.5],[130.3,32.0],[130.5,32.3]]],
+  ["Okinawa",[[127.0,26.8],[127.8,26.9],[128.3,26.7],[128.0,26.0],[127.3,26.0],[127.0,26.3],[127.0,26.8]]],
+  ["Gifu",[[136.5,35.7],[137.2,35.9],[137.5,35.7],[137.5,35.3],[137.2,35.0],[136.8,35.0],[136.5,35.3],[136.5,35.7]]]
+];
+
+function renderMiniMap(){
+  const g=document.getElementById('mm-prefs');
+  if(!g)return;
+  g.innerHTML='';
+  MM_PREFS.forEach(([name,coords])=>{
+    const s=status(name);
+    let fill,opacity;
+    if(s==='visited'){fill='#4ade80';opacity=0.85;}
+    else if(s==='wishlist'){fill='#fcd34d';opacity=0.75;}
+    else{fill='rgba(255,255,255,0.12)';opacity=1;}
+    const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    poly.setAttribute('points',mmPts(coords));
+    poly.setAttribute('fill',fill);
+    poly.setAttribute('fill-opacity',opacity);
+    poly.setAttribute('class','mp');
+    poly.setAttribute('data-name',name);
+    poly.addEventListener('mouseenter',e=>{
+      const tt=document.getElementById('minimap-tooltip');
+      const cnt=locs.filter(l=>l.pref===name).length;
+      tt.textContent=name+(cnt?` · ${cnt} place${cnt>1?'s':''}`:'')+(!s?' · not visited':'');
+      tt.style.display='block';
+      tt.style.left=(e.clientX+12)+'px';
+      tt.style.top=(e.clientY-28)+'px';
+    });
+    poly.addEventListener('mousemove',e=>{
+      const tt=document.getElementById('minimap-tooltip');
+      tt.style.left=(e.clientX+12)+'px';
+      tt.style.top=(e.clientY-28)+'px';
+    });
+    poly.addEventListener('mouseleave',()=>{
+      document.getElementById('minimap-tooltip').style.display='none';
+    });
+    poly.addEventListener('click',()=>{
+      // Fly main map to this prefecture
+      const c=PCENTER[name];
+      if(c)map.flyTo(c,9,{duration:0.7});
+    });
+    // Touch support
+    poly.addEventListener('touchend',e=>{
+      e.preventDefault();
+      document.getElementById('minimap-tooltip').style.display='none';
+      const c=PCENTER[name];
+      if(c)map.flyTo(c,9,{duration:0.7});
+    });
+    g.appendChild(poly);
+  });
+}
+
+window.addEventListener('load',async()=>{
+  // Japan bounding box with padding
+  // Tight bounds: shows all Japan landmass including Okinawa & Hokkaido
+  const JAPAN_BOUNDS = L.latLngBounds(
+    L.latLng(24.0, 122.5),  // SW: just below Okinawa
+    L.latLng(46.0, 146.5)   // NE: Hokkaido + small buffer
+  );
+  map=L.map('map',{
+    center:[36.5,136.0],
+    zoom:5,
+    minZoom:5,
+    maxZoom:18,
+    zoomControl:true,
+    maxBounds: JAPAN_BOUNDS,
+    maxBoundsViscosity:1.0
+  });
+  // Fit to Japan on first load, then lock minZoom to that level
+  map.fitBounds(JAPAN_BOUNDS,{padding:[10,10]});
+  map.options.minZoom=map.getZoom();
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:18,
+    minZoom:5,
+    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    bounds: L.latLngBounds(L.latLng(24.0,122.5), L.latLng(46.0,146.5))
+  }).addTo(map);
+
+  // Populate prefecture dropdown
+  const prefSel=document.getElementById('inp-pref');
+  Object.keys(PCENTER).sort().forEach(n=>{
+    const o=document.createElement('option');o.value=n;o.textContent=n;prefSel.appendChild(o);
+  });
+  drawList();updateStats();renderMiniMap();
+  initMobileLayout();
+
+  // Load prefecture GeoJSON
+  for(const url of ['https://unpkg.com/japan-geojson@1.0.0/japan.geo.json','https://cdn.jsdelivr.net/npm/japan-geojson@1.0.0/japan.geo.json']){
+    try{
+      const r=await fetch(url);
+      if(!r.ok)continue;
+      const data=await r.json();
+      if(data?.features?.length){window._geo=data;renderPrefs(data);renderMarkers();return;}
+    }catch(e){}
+  }
+  renderMarkers();
+});
+</script>
+</body>
+</html>
