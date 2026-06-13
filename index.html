@@ -477,6 +477,25 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
   .loc-row{border-bottom:1px solid rgba(255,255,255,0.06);border-radius:0}
   .loc-row:last-child{border-bottom:none}
 }
+
+/* Sync status indicator */
+#sync-status{
+  display:flex;align-items:center;gap:6px;padding:6px 14px;
+  font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);
+  border-bottom:2px solid var(--border);background:rgba(0,0,20,0.2);
+  flex-shrink:0;letter-spacing:.03em
+}
+#sync-dot{
+  width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.2);
+  flex-shrink:0;transition:background .3s
+}
+#sync-dot.syncing{background:#fcd34d;animation:pulse .8s infinite alternate}
+#sync-dot.ok{background:#4ade80}
+#sync-dot.error{background:#f87171}
+@keyframes pulse{from{opacity:1}to{opacity:0.3}}
+#sync-msg{flex:1}
+#sync-retry{background:transparent;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;font-family:'Inter',sans-serif;display:none}
+#sync-retry:hover{color:white;border-color:rgba(255,255,255,0.5)}
 </style>
 </head>
 <body>
@@ -513,6 +532,13 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
 
     <div id="panel">
       <div id="sheet-handle"><div id="sheet-handle-bar"></div></div>
+
+      <!-- Sync status -->
+      <div id="sync-status">
+        <div id="sync-dot"></div>
+        <span id="sync-msg">Connecting…</span>
+        <button id="sync-retry" onclick="syncFromCloud()">Retry</button>
+      </div>
 
       <!-- ADD PANEL — shown on desktop always, mobile Add tab only -->
       <div id="add-panel">
@@ -662,6 +688,7 @@ const SAMPLE=[
 let locs=[];
 try{locs=JSON.parse(localStorage.getItem('jpn-v3')||'null')||JSON.parse(JSON.stringify(SAMPLE));}
 catch(e){locs=JSON.parse(JSON.stringify(SAMPLE));}
+// nid will be updated after cloud sync
 let nid=Math.max(...locs.map(l=>l.id),0)+1,filt='all',selId=null;
 let map,prefLayer=null,markers={},selectedResult=null,searchTimer=null,activeIdx=-1;
 
@@ -987,7 +1014,7 @@ function addLoc(){
   const pref=manualPref||selectedResult.pref||'Unknown';
   const category=document.querySelector('#cat-picker .cat-btn.active')?.dataset?.cat||'landmark';
   const loc={id:nid++,name:selectedResult.name,pref,type,category,lat:selectedResult.lat,lng:selectedResult.lng};
-  locs.unshift(loc);save();
+  locs.unshift(loc);saveLocal();pushLoc(loc);
   if(window._geo)renderPrefs(window._geo);
   renderMarkers();drawList();updateStats();
   selLoc(loc.id);clearSel();
@@ -999,14 +1026,14 @@ function delLoc(id,e){
   locs=locs.filter(l=>l.id!==id);
   if(markers[id]){map.removeLayer(markers[id]);delete markers[id];}
   if(selId===id)selId=null;
-  save();if(window._geo)renderPrefs(window._geo);drawList();updateStats();
+  saveLocal();deleteLoc(id);if(window._geo)renderPrefs(window._geo);drawList();updateStats();
 }
 
 function changePref(id,newPref){
   const loc=locs.find(l=>l.id===id);
   if(!loc||!newPref)return;
   loc.pref=newPref;
-  save();
+  saveLocal();pushLoc(loc);
   if(window._geo)renderPrefs(window._geo);
   updateStats();
 }
@@ -1015,7 +1042,7 @@ function changeCategory(id,newCat){
   const loc=locs.find(l=>l.id===id);
   if(!loc||!newCat)return;
   loc.category=newCat;
-  save();renderMarkers();drawList();
+  saveLocal();pushLoc(loc);renderMarkers();drawList();
 }
 
 let _selCat='landmark';
@@ -1145,7 +1172,126 @@ function updateStats(){
   renderMiniMap();
 }
 
-function save(){try{localStorage.setItem('jpn-v3',JSON.stringify(locs));}catch(e){}}
+// ── SUPABASE SYNC ────────────────────────────────────────────────────
+const SB_URL='https://idjeaslzszqperkkqpay.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlkamVhc2x6c3pxcGVya2txcGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNjEzOTYsImV4cCI6MjA5NjkzNzM5Nn0.Ojv1ex_5eu8pqXT-uErBWbnBZc1Rvj1-CMgvGkKYTb4';
+
+function sbHeaders(){
+  return {
+    'apikey':SB_KEY,
+    'Authorization':'Bearer '+SB_KEY,
+    'Content-Type':'application/json',
+    'Prefer':'resolution=merge-duplicates'
+  };
+}
+
+function setSyncStatus(state,msg){
+  const dot=document.getElementById('sync-dot');
+  const msgEl=document.getElementById('sync-msg');
+  const retry=document.getElementById('sync-retry');
+  if(!dot)return;
+  dot.className=state==='syncing'?'syncing':state==='ok'?'ok':state==='error'?'error':'';
+  msgEl.textContent=msg;
+  retry.style.display=state==='error'?'block':'none';
+}
+
+// Save to localStorage as backup always
+function saveLocal(){
+  try{localStorage.setItem('jpn-v3',JSON.stringify(locs));}catch(e){}
+}
+
+// Push a single location upsert to Supabase
+async function pushLoc(loc){
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/locations',{
+      method:'POST',
+      headers:sbHeaders(),
+      body:JSON.stringify({
+        id:loc.id,name:loc.name,pref:loc.pref||'',
+        type:loc.type||'visited',category:loc.category||'landmark',
+        lat:loc.lat,lng:loc.lng,
+        updated_at:new Date().toISOString()
+      })
+    });
+    if(!r.ok)throw new Error(await r.text());
+    setSyncStatus('ok','Synced');
+  }catch(e){
+    console.error('pushLoc',e);
+    setSyncStatus('error','Sync failed — saved locally');
+  }
+}
+
+// Delete a location from Supabase
+async function deleteLoc(id){
+  try{
+    await fetch(SB_URL+'/rest/v1/locations?id=eq.'+id,{
+      method:'DELETE',headers:sbHeaders()
+    });
+  }catch(e){console.error('deleteLoc',e);}
+}
+
+// Pull all locations from Supabase
+async function syncFromCloud(){
+  setSyncStatus('syncing','Syncing…');
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/locations?select=*&order=id.asc',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(!r.ok)throw new Error(await r.text());
+    const data=await r.json();
+    if(data&&Array.isArray(data)&&data.length>0){
+      locs=data.map(row=>({
+        id:row.id,name:row.name,pref:row.pref,
+        type:row.type,category:row.category,
+        lat:row.lat,lng:row.lng
+      }));
+      nid=Math.max(...locs.map(l=>l.id),0)+1;
+      saveLocal();
+      renderMarkers();
+      if(window._geo)renderPrefs(window._geo);
+      drawList();updateStats();renderMiniMap();
+    } else if(data&&data.length===0){
+      // Cloud is empty — push local data up
+      if(locs.length>0){
+        setSyncStatus('syncing','Uploading local data…');
+        await pushAllToCloud();
+      }
+    }
+    setSyncStatus('ok',`Synced · ${locs.length} place${locs.length!==1?'s':''}`);
+  }catch(e){
+    console.error('syncFromCloud',e);
+    setSyncStatus('error','Offline — using local data');
+  }
+}
+
+async function pushAllToCloud(){
+  if(!locs.length)return;
+  try{
+    const rows=locs.map(loc=>(({
+      id:loc.id,name:loc.name,pref:loc.pref||'',
+      type:loc.type||'visited',category:loc.category||'landmark',
+      lat:loc.lat,lng:loc.lng,
+      updated_at:new Date().toISOString()
+    })));
+    const r=await fetch(SB_URL+'/rest/v1/locations',{
+      method:'POST',
+      headers:sbHeaders(),
+      body:JSON.stringify(rows)
+    });
+    if(!r.ok)throw new Error(await r.text());
+    setSyncStatus('ok',`Synced · ${locs.length} place${locs.length!==1?'s':''}`);
+  }catch(e){
+    console.error('pushAllToCloud',e);
+    setSyncStatus('error','Upload failed');
+  }
+}
+
+// Main save — local + cloud
+function save(){
+  saveLocal();
+  // Don't await — fire and forget with visual feedback
+  setSyncStatus('syncing','Saving…');
+}
 
 // ── Mobile tab switching ─────────────────────────────────────────────
 let currentTab='map';
@@ -1339,6 +1485,8 @@ window.addEventListener('load',async()=>{
   });
   drawList();updateStats();renderMiniMap();
   initMobileLayout();
+  // Sync from Supabase
+  syncFromCloud();
 
   // Load prefecture GeoJSON
   for(const url of ['https://unpkg.com/japan-geojson@1.0.0/japan.geo.json','https://cdn.jsdelivr.net/npm/japan-geojson@1.0.0/japan.geo.json']){
