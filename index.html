@@ -248,7 +248,7 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
 
 /* ── MOBILE ─────────────────────────────────────────── */
 @media(max-width:640px){
-  /* Tab bar */
+  /* Tab bar — Map + Log only */
   #tab-bar{
     display:flex;background:var(--blue);border-top:2px solid var(--border);
     flex-shrink:0;padding-bottom:var(--safe-bot);z-index:100
@@ -263,6 +263,54 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
   .tab-btn .tab-icon{font-size:20px;line-height:1}
   .tab-btn.active{color:white}
   .tab-btn.active .tab-icon{filter:drop-shadow(0 0 6px rgba(255,255,255,0.4))}
+
+  /* Floating add button on map */
+  #fab{
+    position:absolute;bottom:calc(var(--safe-bot) + 80px);right:16px;
+    width:56px;height:56px;border-radius:50%;z-index:600;
+    background:var(--blue);border:2px solid rgba(255,255,255,0.35);
+    color:white;font-size:28px;line-height:1;cursor:pointer;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent;transition:transform .15s,background .15s
+  }
+  #fab:active{transform:scale(0.92);background:#0f2fa0}
+
+  /* Bottom drawer */
+  #drawer{
+    position:fixed;bottom:0;left:0;right:0;z-index:800;
+    background:var(--blue);
+    border-radius:20px 20px 0 0;
+    border-top:2px solid var(--border);
+    box-shadow:0 -8px 40px rgba(0,0,0,0.5);
+    transform:translateY(100%);
+    transition:transform .3s cubic-bezier(.32,.72,0,1);
+    max-height:92vh;display:flex;flex-direction:column;
+    padding-bottom:var(--safe-bot)
+  }
+  #drawer.open{transform:translateY(0)}
+  #drawer-handle{
+    display:flex;justify-content:center;padding:12px 0 8px;flex-shrink:0;cursor:pointer
+  }
+  #drawer-handle-bar{
+    width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,0.25)
+  }
+  #drawer-head{
+    display:flex;align-items:center;padding:0 16px 12px;flex-shrink:0
+  }
+  #drawer-head h2{font-size:16px;font-weight:900;color:white;flex:1}
+  #drawer-close{
+    background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);
+    width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent
+  }
+  #drawer-body{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding:0 0 20px}
+  #drawer-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0);z-index:799;
+    pointer-events:none;transition:background .3s
+  }
+  #drawer-overlay.open{background:rgba(0,0,0,0.4);pointer-events:auto}
 
   #app{flex-direction:column}
   #header{padding:10px 14px 8px}
@@ -309,13 +357,8 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
   #minimap-section{padding:10px 16px 8px}
   #minimap-svg{max-height:200px;width:auto;margin:0 auto;display:block}
 
-  /* Mobile: add-panel scrollable, log-panel takes full height */
-  #add-panel{
-    display:none;flex-direction:column;
-    position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
-    background:var(--blue)
-  }
-  #add-panel.mob-active{display:flex}
+  /* Mobile: add-panel hidden (replaced by drawer), log-panel full screen */
+  #add-panel{display:none!important}
 
   #log-panel{
     display:none;flex-direction:column;
@@ -323,6 +366,40 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
     background:var(--blue)
   }
   #log-panel.mob-active{display:flex}
+
+  /* Drawer add form styling */
+  #drawer-add-section .fl{display:block;font-size:10px;font-weight:700;color:var(--text-dim);
+    text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;margin-top:12px}
+  #drawer-add-section input,#drawer-add-section select{
+    width:100%;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.22);
+    color:var(--white);border-radius:8px;padding:13px 14px;
+    font-size:16px;font-family:'Inter',sans-serif;outline:none;
+    -webkit-appearance:none;appearance:none
+  }
+  #drawer-add-section input::placeholder{color:rgba(255,255,255,0.32)}
+  #drawer-add-section input:focus,#drawer-add-section select:focus{border-color:rgba(255,255,255,0.65)}
+  #drawer-add-section select option{background:#1a3fd4;color:white}
+  #drawer-add-section #search-wrap{position:relative}
+  #drawer-add-section #spin{position:absolute;right:12px;top:50%;transform:translateY(-50%)}
+  #drawer-add-section #sugg{position:absolute;top:calc(100% + 2px);left:0;right:0;
+    background:#1230b0;border:1.5px solid rgba(255,255,255,0.2);border-radius:8px;
+    z-index:9999;max-height:220px;overflow-y:auto;display:none;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+  #drawer-add-section #sel-badge{
+    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
+    border-radius:7px;padding:10px 36px 10px 12px;margin-top:6px;
+    font-size:12px;color:white;position:relative;display:none
+  }
+  #drawer-add-section #cat-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:0}
+  #drawer-add-section .cat-btn{
+    flex:1;min-width:calc(33% - 6px);padding:11px 4px;border-radius:8px;
+    font-size:13px
+  }
+  #drawer-add-section .add-btn{
+    width:100%;background:var(--white);color:var(--blue);border:none;border-radius:10px;
+    padding:15px;font-size:16px;font-weight:900;cursor:pointer;
+    font-family:'Inter',sans-serif;text-transform:uppercase
+  }
 
   /* Log takes full height of log-panel */
   #log-panel #log-section{
@@ -540,9 +617,8 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
         <button id="sync-retry" onclick="syncFromCloud()">Retry</button>
       </div>
 
-      <!-- ADD PANEL — shown on desktop always, mobile Add tab only -->
+      <!-- ADD PANEL — desktop only -->
       <div id="add-panel">
-        <!-- Add form -->
         <div id="add-section">
           <h2>Add Location</h2>
           <span class="fl">Search Place</span>
@@ -619,13 +695,28 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',sans-serif;
     </div>
   </div>
 
-  <!-- Tab bar (mobile only) -->
+  <!-- Floating Add button (mobile only, sits over map) -->
+  <button id="fab" style="display:none" onclick="openDrawer()" aria-label="Add location">＋</button>
+
+  <!-- Bottom drawer overlay -->
+  <div id="drawer-overlay" onclick="closeDrawer()"></div>
+
+  <!-- Bottom drawer — add form -->
+  <div id="drawer">
+    <div id="drawer-handle" onclick="closeDrawer()"><div id="drawer-handle-bar"></div></div>
+    <div id="drawer-head">
+      <h2>Add Location</h2>
+      <button id="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div id="drawer-body">
+      <div id="drawer-form-mount"></div>
+    </div>
+  </div>
+
+  <!-- Tab bar (mobile only) — Map + Log only -->
   <div id="tab-bar" style="display:none">
     <button class="tab-btn active" id="tab-map" onclick="switchTab('map')">
       <span class="tab-icon">🗺</span>Map
-    </button>
-    <button class="tab-btn" id="tab-add" onclick="switchTab('add')">
-      <span class="tab-icon">＋</span>Add
     </button>
     <button class="tab-btn" id="tab-log" onclick="switchTab('log')">
       <span class="tab-icon">📋</span>Log
@@ -1018,7 +1109,7 @@ function addLoc(){
   if(window._geo)renderPrefs(window._geo);
   renderMarkers();drawList();updateStats();
   selLoc(loc.id);clearSel();
-  if(window.innerWidth<=640)switchTab('map');
+  if(window.innerWidth<=640){closeDrawer();switchTab('map');}
 }
 
 function delLoc(id,e){
@@ -1300,34 +1391,49 @@ function switchTab(tab){
   currentTab=tab;
   const mapEl=document.getElementById('map-wrap');
   const panelEl=document.getElementById('panel');
-  const addPanelEl=document.getElementById('add-panel');
   const logPanelEl=document.getElementById('log-panel');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+tab)?.classList.add('active');
 
-  // Hide all
-  mapEl.classList.add('tab-hidden');
-  panelEl.classList.remove('tab-active');
-  addPanelEl.classList.remove('mob-active');
-  logPanelEl.classList.remove('mob-active');
-
   if(tab==='map'){
+    // Map: show map full screen, hide panel
     mapEl.classList.remove('tab-hidden');
+    panelEl.classList.remove('tab-active');
+    logPanelEl.classList.remove('mob-active');
     setTimeout(()=>{if(map)map.invalidateSize();},50);
-  } else {
+  } else if(tab==='log'){
+    // Log: show panel with log, hide map
+    mapEl.classList.add('tab-hidden');
     panelEl.classList.add('tab-active');
-    if(tab==='add'){
-      addPanelEl.classList.add('mob-active');
-    } else if(tab==='log'){
-      logPanelEl.classList.add('mob-active');
-    }
+    logPanelEl.classList.add('mob-active');
   }
+}
+
+// Drawer open/close
+function openDrawer(){
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+  // Focus search input
+  setTimeout(()=>document.getElementById('inp-name')?.focus(),350);
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+  hideSugg();
 }
 
 function initMobileLayout(){
   if(window.innerWidth<=640){
+    // Move the add-section into the drawer on mobile
+    const addSection=document.getElementById('add-section');
+    const mount=document.getElementById('drawer-form-mount');
+    if(addSection&&mount&&!mount.contains(addSection)){
+      mount.appendChild(addSection);
+      // Remove padding from section since drawer handles it
+      addSection.style.padding='0 16px 8px';
+    }
     document.getElementById('tab-bar').style.display='flex';
-    // Show map tab initially
+    document.getElementById('fab').style.display='flex';
     switchTab('map');
   }
 }
@@ -1340,6 +1446,7 @@ window.addEventListener('resize',()=>{
     document.getElementById('panel').style.display='';
   } else {
     document.getElementById('tab-bar').style.display='flex';
+    document.getElementById('fab').style.display='flex';
     switchTab(currentTab);
   }
 });
